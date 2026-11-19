@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Zoraxy plugin that blocks incoming connections whose IP is listed in the [Data-Shield Critical IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) (~100k IPs, updated every 6 hours).
+Zoraxy plugin that blocks incoming connections whose IP is listed in the [Data-Shield IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) (~100k IPs, updated every 6 hours).
 
 The plugin integrates with [Zoraxy](https://zoraxy.aroz.org/) using **Dynamic Capture mode**: Zoraxy calls `/sniff` for every request, and the plugin returns accept (block) or skip (allow) based on a fast in-memory hash set lookup.
 
@@ -53,4 +53,4 @@ The files in `mod/zoraxy_plugin/` are copied verbatim from `github.com/tobychui/
 
 ### Blocklist source
 
-`blocklistURL` in `main.go` points to the **critical** list (`prod_critical_data-shield_ipv4_blocklist.txt`) fetched from the GitHub raw URL. The standard list (`prod_data-shield_ipv4_blocklist.txt`, ~85k IPs) is available at the same base URL if needed.
+`blocklistURL` in `main.go` points to the full list (`prod_data-shield_ipv4_blocklist.txt`, ~100k IPs) fetched from the GitHub raw URL. Upstream also publishes split lists (`prod_aa-data-shield_ipv4_blocklist.txt` … `prod_ad-…`).

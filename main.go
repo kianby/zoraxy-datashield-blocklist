@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -21,8 +22,9 @@ var uiFiles embed.FS
 
 const (
 	pluginID        = "fr.madyanne.zoraxy.datashield-blocklist"
-	blocklistURL    = "https://raw.githubusercontent.com/duggytuxy/Data-Shield_IPv4_Blocklist/refs/heads/main/prod_critical_data-shield_ipv4_blocklist.txt"
+	blocklistURL    = "https://raw.githubusercontent.com/duggytuxy/Data-Shield_IPv4_Blocklist/refs/heads/main/prod_data-shield_ipv4_blocklist.txt"
 	refreshInterval = 6 * time.Hour
+	minValidIPs     = 1000
 )
 
 var (
@@ -59,7 +61,7 @@ var pluginSpec = plugin.IntroSpect{
 	Name:          "Data-Shield Blocklist",
 	Author:        "Yax",
 	AuthorContact: "",
-	Description:   "Blocks incoming connections from IPs listed in the Data-Shield Critical IPv4 Blocklist (~100k IPs, updated every 6h).",
+	Description:   "Blocks incoming connections from IPs listed in the Data-Shield IPv4 Blocklist (~100k IPs, updated every 6h).",
 	URL:           "https://github.com/kianby/zoraxy-datashield-blocklist",
 	Type:          plugin.PluginType_Router,
 	VersionMajor:  1,
@@ -77,7 +79,7 @@ func main() {
 	}
 
 	if err := refreshBlocklist(); err != nil {
-		log.Printf("[datashield] Warning: initial blocklist load failed: %v", err)
+		log.Printf("[datashield] Warning: initial blocklist load failed: %v — the blocklist is EMPTY and the plugin is blocking nothing until a refresh succeeds", err)
 	}
 
 	go func() {
@@ -171,7 +173,7 @@ func blockHandler(w http.ResponseWriter, r *http.Request) {
 </html>`)
 }
 
-// refreshBlocklist downloads the Data-Shield Critical IPv4 Blocklist and replaces the in-memory map.
+// refreshBlocklist downloads the Data-Shield IPv4 Blocklist and replaces the in-memory map.
 // On failure, the existing blocklist is kept unchanged.
 func refreshBlocklist() error {
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -185,18 +187,9 @@ func refreshBlocklist() error {
 		return fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
 	}
 
-	// Pre-allocate with a capacity slightly above the expected ~100k entries
-	newList := make(map[string]struct{}, 110000)
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		newList[line] = struct{}{}
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("parse: %w", err)
+	newList, err := parseBlocklist(resp.Body)
+	if err != nil {
+		return err
 	}
 
 	blocklistMu.Lock()
@@ -207,6 +200,32 @@ func refreshBlocklist() error {
 	ipCount.Store(int64(len(newList)))
 	log.Printf("[datashield] Blocklist updated: %d IPs loaded", len(newList))
 	return nil
+}
+
+// parseBlocklist reads one IPv4 address per line, skipping blanks, comments and invalid lines.
+// It fails if fewer than minValidIPs valid addresses are found, so a bad download never replaces a good list.
+func parseBlocklist(r io.Reader) (map[string]struct{}, error) {
+	// Pre-allocate with a capacity slightly above the expected ~100k entries
+	list := make(map[string]struct{}, 110000)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parsed := net.ParseIP(line)
+		if parsed == nil || parsed.To4() == nil {
+			continue
+		}
+		list[parsed.String()] = struct{}{}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+	if len(list) < minValidIPs {
+		return nil, fmt.Errorf("only %d valid IPs found (need at least %d), keeping existing list", len(list), minValidIPs)
+	}
+	return list, nil
 }
 
 type statusResponse struct {

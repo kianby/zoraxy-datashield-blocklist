@@ -1,12 +1,12 @@
 # zoraxy-datashield-blocklist
 
-A [Zoraxy](https://zoraxy.aroz.org/) plugin that blocks incoming connections from IPs listed in the [Data-Shield Critical IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) — roughly 100,000 known-malicious IPv4 addresses, refreshed automatically every 6 hours.
+A [Zoraxy](https://zoraxy.aroz.org/) plugin that blocks incoming connections from IPs listed in the [Data-Shield IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) — roughly 100,000 known-malicious IPv4 addresses, refreshed automatically every 6 hours.
 
 ![Plugin UI screenshot](screenshot.png)
 
 ## Features
 
-- Blocks ~100k threat IPs from the Data-Shield Critical list with sub-millisecond overhead per request
+- Blocks ~100k threat IPs from the Data-Shield list with sub-millisecond overhead per request
 - Auto-refreshes the blocklist every 6 hours (no restart needed)
 - Manual blocklist: add or remove individual IPs from the Zoraxy plugin UI
 - Private/loopback/link-local addresses are never blocked regardless of the list
@@ -67,7 +67,7 @@ When a blocked IP connects, Zoraxy routes the request through this plugin's capt
 
 ## Blocklist source
 
-This plugin uses the **critical** tier of the [Data-Shield IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) maintained by [@duggytuxy](https://github.com/duggytuxy). The list targets scanners, botnets, and other high-confidence threat sources.
+This plugin uses the full [Data-Shield IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) maintained by [@duggytuxy](https://github.com/duggytuxy). The list targets scanners, botnets, and other high-confidence threat sources.
 
 ## License
 
