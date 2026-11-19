@@ -164,6 +164,15 @@
   <div id="msg"></div>
 
   <div class="test-section">
+    <h2>Blocklist URL</h2>
+    <div class="add-row">
+      <input type="text" id="url-input" />
+      <button onclick="saveURL()">Save</button>
+      <button onclick="resetURL()">Reset</button>
+    </div>
+  </div>
+
+  <div class="test-section">
     <h2>Manual test IPs</h2>
     <div class="add-row">
       <input type="text" id="ip-input" placeholder="1.2.3.4" />
@@ -213,6 +222,8 @@
             ? new Date(d.last_updated).toLocaleString()
             : 'Never';
           document.getElementById('last-updated').textContent = upd;
+          const urlInput = document.getElementById('url-input');
+          if (document.activeElement !== urlInput && !urlInput.dataset.dirty) urlInput.value = d.blocklist_url;
           renderManualIPs(d.manual_ips);
         })
         .catch(() => {
@@ -246,6 +257,34 @@
           setTimeout(() => { document.getElementById('msg').textContent = ''; }, 4000);
         });
     }
+
+    document.getElementById('url-input').addEventListener('input', e => { e.target.dataset.dirty = '1'; });
+
+    function postURL(url) {
+      const msg = document.getElementById('msg');
+      fetch('api/set-url?url=' + encodeURIComponent(url), {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': getCsrfToken() }
+      })
+        .then(r => {
+          if (!r.ok) return r.text().then(t => { throw new Error(t.trim()); });
+          return r.json();
+        })
+        .then(d => {
+          const input = document.getElementById('url-input');
+          input.value = d.url;
+          delete input.dataset.dirty;
+          msg.textContent = 'URL saved. Downloading blocklist…';
+          setTimeout(() => { load(); msg.textContent = ''; }, 6000);
+        })
+        .catch(e => {
+          msg.textContent = 'Error: ' + e.message;
+          setTimeout(() => { msg.textContent = ''; }, 4000);
+        });
+    }
+
+    function saveURL() { postURL(document.getElementById('url-input').value.trim()); }
+    function resetURL() { postURL(''); }
 
     function forceRefresh() {
       const btn = document.getElementById('refresh-btn');

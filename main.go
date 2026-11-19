@@ -9,6 +9,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,15 +24,19 @@ var uiFiles embed.FS
 
 const (
 	pluginID        = "fr.madyanne.zoraxy.datashield-blocklist"
-	blocklistURL    = "https://raw.githubusercontent.com/duggytuxy/Data-Shield_IPv4_Blocklist/refs/heads/main/prod_data-shield_ipv4_blocklist.txt"
+	defaultURL      = "https://raw.githubusercontent.com/duggytuxy/Data-Shield_IPv4_Blocklist/refs/heads/main/prod_data-shield_ipv4_blocklist.txt"
 	refreshInterval = 6 * time.Hour
 	minValidIPs     = 1000
+	configFile      = "config.json"
 )
 
 var (
 	blocklist   map[string]struct{}
 	blocklistMu sync.RWMutex
 	lastUpdated time.Time
+
+	blocklistURL   = defaultURL
+	blocklistURLMu sync.RWMutex
 
 	manualBlocklist   = map[string]struct{}{}
 	manualBlocklistMu sync.RWMutex
@@ -78,6 +84,7 @@ func main() {
 		log.Fatal("[datashield] Failed to receive configure spec:", err)
 	}
 
+	loadConfig()
 	if err := refreshBlocklist(); err != nil {
 		log.Printf("[datashield] Warning: initial blocklist load failed: %v — the blocklist is EMPTY and the plugin is blocking nothing until a refresh succeeds", err)
 	}
@@ -104,6 +111,7 @@ func main() {
 	}, mux)
 	uiRouter.HandleFunc("/api/status", statusHandler, mux)
 	uiRouter.HandleFunc("/api/refresh", refreshHandler, mux)
+	uiRouter.HandleFunc("/api/set-url", setURLHandler, mux)
 	uiRouter.HandleFunc("/api/add-ip", addIPHandler, mux)
 	uiRouter.HandleFunc("/api/remove-ip", removeIPHandler, mux)
 	uiRouter.AttachHandlerToMux(mux)
@@ -177,7 +185,7 @@ func blockHandler(w http.ResponseWriter, r *http.Request) {
 // On failure, the existing blocklist is kept unchanged.
 func refreshBlocklist() error {
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(blocklistURL)
+	resp, err := client.Get(getBlocklistURL())
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}
@@ -228,12 +236,58 @@ func parseBlocklist(r io.Reader) (map[string]struct{}, error) {
 	return list, nil
 }
 
+type config struct {
+	BlocklistURL string `json:"blocklist_url"`
+}
+
+func getBlocklistURL() string {
+	blocklistURLMu.RLock()
+	defer blocklistURLMu.RUnlock()
+	return blocklistURL
+}
+
+func setBlocklistURL(u string) {
+	blocklistURLMu.Lock()
+	blocklistURL = u
+	blocklistURLMu.Unlock()
+}
+
+func loadConfig() {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return
+	}
+	var c config
+	if err := json.Unmarshal(data, &c); err != nil || validateURL(c.BlocklistURL) != nil {
+		log.Printf("[datashield] Ignoring invalid %s, using default URL", configFile)
+		return
+	}
+	setBlocklistURL(c.BlocklistURL)
+}
+
+func saveConfig(u string) error {
+	data, err := json.Marshal(config{BlocklistURL: u})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configFile, data, 0o644)
+}
+
+func validateURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("must be a valid http or https URL")
+	}
+	return nil
+}
+
 type statusResponse struct {
 	Loaded       bool      `json:"loaded"`
 	IPCount      int64     `json:"ip_count"`
 	LastUpdated  time.Time `json:"last_updated"`
 	BlockedCount int64     `json:"blocked_count"`
 	ManualIPs    []string  `json:"manual_ips"`
+	BlocklistURL string    `json:"blocklist_url"`
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
@@ -256,6 +310,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		LastUpdated:  upd,
 		BlockedCount: blockedCount.Load(),
 		ManualIPs:    manualIPs,
+		BlocklistURL: getBlocklistURL(),
 	})
 }
 
@@ -305,6 +360,32 @@ func removeIPHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "removed", "ip": ip})
+}
+
+func setURLHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	u := strings.TrimSpace(r.URL.Query().Get("url"))
+	if u == "" {
+		u = defaultURL
+	}
+	if err := validateURL(u); err != nil {
+		http.Error(w, "Bad Request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	setBlocklistURL(u)
+	if err := saveConfig(u); err != nil {
+		log.Printf("[datashield] Could not save %s: %v", configFile, err)
+	}
+	go func() {
+		if err := refreshBlocklist(); err != nil {
+			log.Printf("[datashield] Refresh after URL change failed: %v", err)
+		}
+	}()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated", "url": u})
 }
 
 func refreshHandler(w http.ResponseWriter, r *http.Request) {

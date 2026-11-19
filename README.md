@@ -67,7 +67,7 @@ When a blocked IP connects, Zoraxy routes the request through this plugin's capt
 
 ## Blocklist source
 
-This plugin uses the full [Data-Shield IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) maintained by [@duggytuxy](https://github.com/duggytuxy). The list targets scanners, botnets, and other high-confidence threat sources.
+This plugin uses the full [Data-Shield IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) maintained by [@duggytuxy](https://github.com/duggytuxy). The URL can be changed from the plugin UI (saved in `config.json` next to the binary), and defaults to the full list. The list targets scanners, botnets, and other high-confidence threat sources.
 
 ## License
 

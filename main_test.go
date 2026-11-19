@@ -33,3 +33,16 @@ func TestParseBlocklistRejectsBadBodies(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateURL(t *testing.T) {
+	for _, u := range []string{"https://example.com/list.txt", "http://10.0.0.1:8080/l"} {
+		if err := validateURL(u); err != nil {
+			t.Errorf("%s: %v", u, err)
+		}
+	}
+	for _, u := range []string{"", "ftp://example.com/l", "example.com/l", "https://"} {
+		if err := validateURL(u); err == nil {
+			t.Errorf("%q: expected error", u)
+		}
+	}
+}
