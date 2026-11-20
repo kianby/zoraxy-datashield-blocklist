@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Zoraxy plugin that blocks incoming connections whose IP is listed in the [Data-Shield Critical IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) (~100k IPs, updated every 6 hours).
+Zoraxy plugin that blocks incoming connections whose IP is listed in the [Data-Shield IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) (~100k IPs, updated every 6 hours).
 
 The plugin integrates with [Zoraxy](https://zoraxy.aroz.org/) using **Dynamic Capture mode**: Zoraxy calls `/sniff` for every request, and the plugin returns accept (block) or skip (allow) based on a fast in-memory hash set lookup.
 
@@ -33,8 +33,9 @@ ui/index.html             # Plugin UI (embedded via //go:embed ui)
    - `/sniff/` — Dynamic sniff handler (called by Zoraxy for every request): extracts `RemoteAddr`, skips IPv6 and private IPs, does a `RLock` lookup on both the auto-refreshed blocklist and the manual blocklist, returns `SniffResultAccept` to block or `SniffResultSkip` to pass.
    - `/block/` — Dynamic capture handler: increments `blockedCount`, writes HTTP 403.
    - `/ui/` — Embedded web UI with the following JSON API endpoints:
-     - `GET /ui/api/status` — returns `loaded`, `ip_count`, `last_updated`, `blocked_count`, `manual_ips`
+     - `GET /ui/api/status` — returns `loaded`, `ip_count`, `last_updated`, `blocked_count`, `manual_ips`, `blocklist_url`
      - `POST /ui/api/refresh` — triggers an async blocklist re-download
+     - `POST /ui/api/set-url?url=<url>` — sets the blocklist URL (empty resets to default), saves it to `config.json`, triggers a refresh
      - `GET /ui/api/add-ip?ip=<ipv4>` — adds an IPv4 address to the manual blocklist
      - `GET /ui/api/remove-ip?ip=<ipv4>` — removes an IP from the manual blocklist
 3. A background goroutine refreshes the auto blocklist every 6 hours. On failure, the existing map is preserved.
@@ -53,4 +54,4 @@ The files in `mod/zoraxy_plugin/` are copied verbatim from `github.com/tobychui/
 
 ### Blocklist source
 
-`blocklistURL` in `main.go` points to the **critical** list (`prod_critical_data-shield_ipv4_blocklist.txt`) fetched from the GitHub raw URL. The standard list (`prod_data-shield_ipv4_blocklist.txt`, ~85k IPs) is available at the same base URL if needed.
+`defaultURL` in `main.go` (overridable from the UI, saved in `config.json`) points to the full list (`prod_data-shield_ipv4_blocklist.txt`, ~100k IPs) fetched from the GitHub raw URL. Upstream also publishes split lists (`prod_aa-data-shield_ipv4_blocklist.txt` … `prod_ad-…`).
