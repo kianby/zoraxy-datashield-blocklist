@@ -12,6 +12,7 @@ A [Zoraxy](https://zoraxy.aroz.org/) plugin that blocks incoming connections fro
 - Private/loopback/link-local addresses are never blocked regardless of the list
 - IPv6 traffic passes through unaffected (the Data-Shield list is IPv4-only)
 - Displays live stats: IPs loaded, last update time, total blocked requests
+- Configurable blocklist URL — change the source directly from the plugin UI; persisted in `config.json` next to the binary
 
 ## Requirements
 
@@ -53,6 +54,16 @@ In the plugin UI you can:
 
 > **Note:** Manually added IPs are held in memory only. They are cleared when the plugin or Zoraxy restarts.
 
+### Changing the blocklist URL
+
+The plugin fetches the Data-Shield list from a default URL that can be overridden directly in the UI:
+
+1. In the **Blocklist URL** field, enter any `http://` or `https://` URL pointing to a plain-text file with one IPv4 address per line.
+2. Click **Save** — the new URL is saved to `config.json` next to the plugin binary and a refresh is triggered immediately.
+3. Click **Reset** to revert to the built-in default URL.
+
+> **Note:** The plugin requires at least 1,000 valid IPv4 entries in the downloaded file before replacing the active blocklist. This prevents an accidental empty list (or an HTTP error page) from leaving the plugin unprotected.
+
 ### What gets blocked
 
 When a blocked IP connects, Zoraxy routes the request through this plugin's capture handler, which returns a `403 Forbidden` response. The connection is dropped before it reaches any proxied backend.
@@ -68,6 +79,14 @@ When a blocked IP connects, Zoraxy routes the request through this plugin's capt
 ## Blocklist source
 
 This plugin uses the full [Data-Shield IPv4 Blocklist](https://github.com/duggytuxy/Data-Shield_IPv4_Blocklist) maintained by [@duggytuxy](https://github.com/duggytuxy). The URL can be changed from the plugin UI (saved in `config.json` next to the binary), and defaults to the full list. The list targets scanners, botnets, and other high-confidence threat sources.
+
+Example `config.json`:
+
+```json
+{
+  "blocklist_url": "https://raw.githubusercontent.com/duggytuxy/Data-Shield_IPv4_Blocklist/refs/heads/main/prod_data-shield_ipv4_blocklist.txt"
+}
+```
 
 ## License
 
